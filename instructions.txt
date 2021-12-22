@@ -1,0 +1,9 @@
+SOME THINGS THAT NEED TO BE DONE BEFORE USING THE ASSISTANT
+
+1. Create a file named "contacts.json" (without quotes) in the userData directory to get Whatsapp functionality working
+2. For the email functionality to work:    
+    a. Create a file named "emails.json" (without quotes) in the userData directory.
+    b. create a file named config.py in the userData directory. Add the following two lines : 
+        GMAIL_USERNAME='Your gmail username'
+        GMAIL_PASSWORD='Your gmail password'
+    c. You may have to allow access to less secure apps in your gmail account.
