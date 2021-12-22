@@ -43,20 +43,21 @@ def speak(text):
 def takeCommand(first):
     global status_label,chat_frame
     r = sr.Recognizer()
-    # r.pause_threshold = 1
+    r.pause_threshold = 1
 
     with sr.Microphone() as source:
         print("Listening...")
         status_label['text'] = "Listening..."
+        r.adjust_for_ambient_noise(source)
         audio = r.listen(source)
 
-        try:
-            print("Processing...")
-            status_label['text'] = "Processing..."
-            query = r.recognize_google(audio,language='en-in')
-            # print(query)
-        except Exception as e:
-            print(e)
+    try:
+        print("Processing...")
+        status_label['text'] = "Processing..."
+        query = r.recognize_google(audio,language='en-in')
+        # print(query)
+    except Exception as e:
+        print(e)
     
     if first:
         for widget in chat_frame.winfo_children():
@@ -253,7 +254,19 @@ def interpretCommand():
             res = requests.get(Wurl)
             print(res.text)
 
-        if "whatsapp" in query:
+        elif wordExists(['maps','google maps'],query):
+            query = query.replace('google maps','')
+            query = query.replace('maps','')
+            query = query.replace('google','')
+            query = query.replace('search','')
+            query = query.replace(' for ','')
+            query = query.replace(' in ','')
+
+            webbrowser.open('https://www.google.com/maps/place/' + query)
+
+            speak("Opening google maps")
+
+        elif "whatsapp" in query:
             handleWhatsapp()
         
         elif wordExists(["email","mail","gmail"],query):
@@ -369,6 +382,10 @@ def interpretCommand():
             speak("Goodbye. Have a nice day.")
             window.destroy()
             return
+        
+        else:
+            webbrowser.open('https://www.google.com/search?q=' + query)
+            speak("Here's what I found")
             
             
 
