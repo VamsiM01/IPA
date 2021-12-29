@@ -10,7 +10,6 @@ import yagmail
 from bs4 import BeautifulSoup
 import requests
 import urllib.parse
-import sys
 
 # GLOBALS
 
@@ -254,6 +253,49 @@ def interpretCommand():
             res = requests.get(Wurl)
             print(res.text)
 
+        elif "holidays" in query:
+            from googleCalendar import listHolidays
+            holidays = listHolidays()
+            if not holidays:
+                speak("No upcoming holidays")
+            else:
+                speak("Here are the upcoming holidays")
+                for holiday in holidays:
+                    speak(holiday)          
+
+        elif "calendar" in query:
+            speak("Sure, what do you want to do in the calendar? Create an event or get list of events?")
+            calendarCommand = takeCommand(False)
+            from googleCalendar import getEvents,createEvent
+            if "list" in calendarCommand:
+                events = getEvents()
+                if not events:
+                    speak("You have no upcoming events.")
+                else:
+                    speak("Here are your upcoming events")
+                    for event in events:
+                        speak(event)
+            elif "create" in calendarCommand:
+                speak("What is the title of the event?")
+                title = takeCommand(False)
+                speak("When is the event? Please respond in the format day, month name and year")
+                date = takeCommand(False).split(' ')
+                speak("At what time? Example : 16 hours 30 minutes")
+                time = takeCommand(False).split(' ')
+
+                if len(date) != 3 or len(time) != 4:
+                    speak("Datetime format error, try again")
+
+                else:
+                    day,month,year = date[0],date[1],date[2]
+                    hours,minutes = time[0], time[2]
+                    createEvent(title,day,month,year,hours,minutes)
+                    speak("The event has been created.")
+                    speak(title + ' on ' + day + ' ' + month + ' ' + year + ' at ' + hours + ' hours ' + minutes + ' minutes.')
+
+                    
+
+
         elif wordExists(['maps','google maps'],query):
             query = query.replace('google maps','')
             query = query.replace('maps','')
@@ -314,15 +356,21 @@ def interpretCommand():
         elif wordExists(["how","what","when","where","why"],query):
             from userData.config import APP_ID
 
-            query = urllib.parse.quote_plus(query)
+            urlquery = urllib.parse.quote_plus(query)
 
             url = "http://api.wolframalpha.com/v1/result?"
             url += 'appid=' + APP_ID
-            url += '&i=' + query
+            url += '&i=' + urlquery
 
             res = requests.get(url)
-            print(res.text)
-            speak(res.text)
+            # print(res.text)
+            # speak(res.text)
+            if "Wolfram|Alpha" in res.text:
+                speak("Here's what I found")
+                webbrowser.open('https://www.google.com/search?q=' + query)
+            else:
+                speak(res.text)
+
 
         elif wordExists(['solve','math','problem','equation'],query):
             from userData.config import APP_ID
@@ -378,23 +426,18 @@ def interpretCommand():
             speak("No worries. I am here to help")
 
         elif wordExists(['exit','goodbye','shutdown'],query):
-            global window
             speak("Goodbye. Have a nice day.")
-            window.destroy()
-            return
+            global status_label
+            status_label['text'] = 'No longer listening...'
+            break
         
         else:
             webbrowser.open('https://www.google.com/search?q=' + query)
             speak("Here's what I found")
             
+
+    
             
-
-        
-
-            
-
-
-
 
         
 
@@ -414,8 +457,8 @@ if __name__ == "__main__":
     chat_frame.pack_propagate(False)
     chat_frame.pack()
 
-    scroll = Scrollbar(chat_frame,orient='vertical')
-    scroll.pack(side=RIGHT,fill=Y)  
+    # scroll = Scrollbar(chat_frame,orient='vertical')
+    # scroll.pack(side=RIGHT,fill=Y)  
 
     status_label = Label(width=400,height=100,text="Listening...",bg=CURRENT_STATUS_LABEL_BG,font=('Montserrat',20))
     status_label.pack()
@@ -430,6 +473,10 @@ if __name__ == "__main__":
     th.start()
 
     window.mainloop()
+
+
+    
+
 
 
 
