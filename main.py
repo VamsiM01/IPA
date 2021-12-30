@@ -1,6 +1,7 @@
 # SYSTEM LIBRARY IMPORTS
 import json
 import os
+import random
 import speech_recognition as sr
 import pyttsx3
 from tkinter import *
@@ -10,10 +11,13 @@ import yagmail
 from bs4 import BeautifulSoup
 import requests
 import urllib.parse
-
+from config import *
+from twilio.rest import Client
+from twilio.twiml.voice_response import VoiceResponse, Say
 # GLOBALS
 
 ASSISTANT_NAME = 'Bruno'.lower()
+loop = ["Could you speak a bit louder","Sorry, I didn't get that one. Could you please repeat","Could you try that again"]
 
 # COLORS
 WINDOW_BG = '#203645'
@@ -30,6 +34,8 @@ if os.path.exists('userData') == False:
 #########################################################################################
 # SETTING UP TEXT TO SPEECH ENGINE 
 engine = pyttsx3.init()
+voices = engine.getProperty('voices')
+engine.setProperty('voice', voices[1].id)
 
 def speak(text):
     bot_chat = Label(chat_frame,text=text, bg=BOT_CHAT_BG, fg=TEXT_COLOR,justify=LEFT, wraplength=250,font=('Montserrat',12,'bold'))
@@ -43,7 +49,7 @@ def takeCommand(first):
     global status_label,chat_frame
     r = sr.Recognizer()
     r.pause_threshold = 1
-
+    query=""
     with sr.Microphone() as source:
         print("Listening...")
         status_label['text'] = "Listening..."
@@ -54,10 +60,13 @@ def takeCommand(first):
         print("Processing...")
         status_label['text'] = "Processing..."
         query = r.recognize_google(audio,language='en-in')
-        # print(query)
+        
     except Exception as e:
         print(e)
-    
+    if(not first and len(query)==0):
+        speak(loop[random.randint(0,2)])
+        return takeCommand(False)
+        
     if first:
         for widget in chat_frame.winfo_children():
             widget.destroy()
@@ -67,38 +76,21 @@ def takeCommand(first):
     return query.lower()
 #######################################################################################
 
-###############################  WHATSAPP ####################################
-
-contactsFile = open('./userData/contacts.json','r')
-contacts = json.load(contactsFile)
-contactsFile.close()
+############################### ADD CONTACT #########################################
 
 popup_window = None
 name = None
 number = None
-
+email = None
 newContactName = None
 
-def handleWhatsapp():
-    global contacts,newContactName
-    speak("Sure. Who do you want to send the message to?")
-    person = takeCommand(False)
-    
-    print(contacts)
-    if person in contacts:
-        sendMessage(person)
-    else:
-        speak("I dont have the contact. Please fill the details so I can message the contact directly next time.")
-        WA_Popup()
-        sendMessage(newContactName)
-
-def WA_Popup():
-    global popup_window,name,number
+def CT_Popup():
+    global popup_window,name,number,email
     popup_window = Tk()
-    popup_window.title('Whatsapp service')
-    popup_window.iconbitmap('./static/images/whatsapp.ico')
+    popup_window.title('Add Contact')
+    popup_window.iconbitmap('./static/images/contacts.ico')
 
-    popup_window.configure(bg='white',width=300,height=220)
+    popup_window.configure(bg='white',width=300,height=400)
     popup_window.pack_propagate(False)
 
 
@@ -109,24 +101,46 @@ def WA_Popup():
     Label(popup_window,text='Number(with Country Code)',font=('Montserrat',12),bg='white').pack(padx=5,pady=5)
     number = Entry(popup_window,font=('Montserrat',12),relief=FLAT,bd=5,bg='#DCDCDC')
     number.pack(padx=5,pady=5)
-
-    Button(popup_window,text='Send',bg='#14A769',font=('Montserrat',12),relief=FLAT,fg='white',command=storeContact).pack(padx=20,pady=10)
+    
+    Label(popup_window,text='Email',font=('Montserrat',12),bg='white').pack(padx=5,pady=5)
+    email = Entry(popup_window,font=('Montserrat',12),relief=FLAT,bd=5,bg='#DCDCDC')
+    email.pack(padx=5,pady=5)
+    
+    Button(popup_window,text='Add Contact',bg='#14A769',font=('Montserrat',12),relief=FLAT,fg='white',command=storeContact).pack(padx=20,pady=10)
     popup_window.mainloop()
 
 
 def storeContact():
-    global popup_window,name,number,newContactName
-    # print(name.get())
-    # print(number.get())
-    contacts[name.get()] = number.get()
-    newContactName = name.get()
+    global popup_window,name,number,newContactName,email
+    contacts[name.get().lower()] = []
+    contacts[name.get().lower()]+=[number.get(), email.get()]
+    newContactName = name.get().lower()
     with open('./userData/contacts.json','w') as f:
         json.dump(contacts,f)
 
     popup_window.destroy()
 
+
+###############################  WHATSAPP ####################################
+
+def handleWhatsapp():
+    global newContactName
+    contactsFile = open('./userData/contacts.json','r')
+    contacts = json.load(contactsFile)
+    contactsFile.close()
+    speak("Sure. Who do you want to send the message to?")
+    person = takeCommand(False)
+    
+    print(contacts)
+    if person in contacts:
+        sendMessage(person)
+    else:
+        speak(person+" is not in my contacts list. Please fill the details to add a new contact.")
+        CT_Popup()
+        sendMessage(newContactName)
+
 def sendMessage(person):
-    phoneNo = contacts[person]
+    phoneNo = contacts[person][0]
     speak("What text do you want to send?")
     text = takeCommand(False)
     url = "https://web.whatsapp.com/send?phone=" + phoneNo + "&text=" + text
@@ -146,63 +160,26 @@ def sendMessage(person):
 
 ################################# EMAIL AUTOMATION ##############################################
 
-emailFile = open('./userData/emails.json','r')
-emails = json.load(emailFile)
-emailFile.close()
-
-email_window = None
-emailName = None
-email = None
-newEmailName = None
 def handleEmail():
-    global emails,newEmailName
+    
+    global newContactName
+
+    contactsFile = open('./userData/contacts.json','r')
+    contacts = json.load(contactsFile)
+    contactsFile.close()
 
     speak("Sure. Who do you want to send the mail to?")
     person = takeCommand(False)
 
-    if person in emails:
+    if person in contacts:
         sendEmail(person)
     else:
-        speak("I dont have the email. Please fill the details so that I can email directly the next time")
-        Email_Popup()
+        speak(person+" is not in my contacts list. Please fill the details to add a new contact.")
+        CT_Popup()
         sendEmail(newEmailName)
 
-def Email_Popup():
-    global email_window,email,emailName
-
-    email_window = Tk()
-    email_window.title('Email service')
-    email_window.iconbitmap('./static/images/email.ico')
-
-    email_window.configure(bg='white',width=300,height=220)
-    email_window.pack_propagate(False)
-
-
-    Label(email_window,text='Name',font=('Montserrat',12),bg='white').pack(padx=5,pady=5)
-    emailName = Entry(email_window,font=('Montserrat',12),relief=FLAT,bd=5,bg='#DCDCDC')
-    emailName.pack(padx=5,pady=5)
-
-    Label(email_window,text='Email',font=('Montserrat',12),bg='white').pack(padx=5,pady=5)
-    email = Entry(email_window,font=('Montserrat',12),relief=FLAT,bd=5,bg='#DCDCDC')
-    email.pack(padx=5,pady=5)
-
-    Button(email_window,text='Send',bg='#14A769',font=('Montserrat',12),relief=FLAT,fg='white',command=storeEmail).pack(padx=20,pady=10)
-    email_window.mainloop()
-
-def storeEmail():
-    global email_window, emailName,email,newEmailName,emails
-
-    emails[emailName.get()] = email.get()
-    newEmailName = emailName.get()
-    with open('./userData/emails.json','w') as f:
-        json.dump(emails,f)
-
-    email_window.destroy()
-
-
 def sendEmail(person):
-    from userData.config import GMAIL_USERNAME, GMAIL_PASSWORD
-    recipient = emails[person]
+    recipient = contacts[person][1]
 
     yag = yagmail.SMTP(GMAIL_USERNAME,GMAIL_PASSWORD)
 
@@ -226,16 +203,45 @@ def wordExists(listOfWords,query):
             return True
     return False
 
-#################################################################################################
+################################# VOICE MESSAGE BY CALL #########################################
+contactsFile = open('./userData/contacts.json','r')
+contacts = json.load(contactsFile)
+contactsFile.close()
 
+def handleCall():
+    global contacts,newContactName
+    speak("Sure. Who do you want to make a voice call to?")
+    person = takeCommand(False)
+    print(person)
+    print(contacts)
+    if person in contacts:
+        makeACall(person)
+    else:
+        speak(person+" is not in my contacts list. Please fill the details to add a new contact.")
+        CT_Popup()
+        makeACall(newContactName)
+
+def makeACall(person):
+    
+    speak("What voice message do you want to send?")
+    voice_m = takeCommand(False)
+    DIAL_NUMBER = contacts[person]
+
+    response = VoiceResponse()
+    response.say(voice_m, voice='alice', language='en-IN')
+    
+    client = Client(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
+
+    client.calls.create(to=DIAL_NUMBER, from_=TWILIO_PHONE_NUMBER, twiml=str(response))
+    speak('Your voice message has been sucessfully sent to '+person)
+
+###############################################################################################
 
 def interpretCommand():
 
     while True:
         query = takeCommand(True).lower()
-
         if "weather" in query:
-            from userData.config import APP_ID
             ip = requests.get('https://api.ipify.org').text
             url = 'http://ip-api.com/json/'
             url += ip
@@ -252,6 +258,7 @@ def interpretCommand():
 
             res = requests.get(Wurl)
             print(res.text)
+            speak(res.text)
 
         elif "holidays" in query:
             from googleCalendar import listHolidays
@@ -308,9 +315,12 @@ def interpretCommand():
 
             speak("Opening google maps")
 
-        elif "whatsapp" in query:
+        elif wordExists(["message","whatsapp"],query):
             handleWhatsapp()
-        
+
+        elif wordExists(["call","voice call"],query):
+            handleCall()
+            
         elif wordExists(["email","mail","gmail"],query):
             handleEmail()
 
@@ -343,19 +353,15 @@ def interpretCommand():
 
         elif "wikipedia" in query:
             import wikipedia
-
             query = query.replace('search in wikipedia','')
             query = query.replace('wikipedia','')
             query = query.replace('search','')
             query = query.replace('find','')
-
             result = wikipedia.summary(query,sentences=2)
             print(result)
             speak(result)
         
-        elif wordExists(["how","what","when","where","why"],query):
-            from userData.config import APP_ID
-
+        elif wordExists(["how","what","when","where","why","who","which","tell"],query):
             urlquery = urllib.parse.quote_plus(query)
 
             url = "http://api.wolframalpha.com/v1/result?"
@@ -363,8 +369,6 @@ def interpretCommand():
             url += '&i=' + urlquery
 
             res = requests.get(url)
-            # print(res.text)
-            # speak(res.text)
             if "Wolfram|Alpha" in res.text:
                 speak("Here's what I found")
                 webbrowser.open('https://www.google.com/search?q=' + query)
@@ -373,8 +377,6 @@ def interpretCommand():
 
 
         elif wordExists(['solve','math','problem','equation'],query):
-            from userData.config import APP_ID
-
             query = query.replace('solve','')
             query = query.replace('math','')
             query = query.replace('equation','')
@@ -397,7 +399,7 @@ def interpretCommand():
             speak(resText)
 
         elif wordExists(["news","latest"],query):
-            url = 'https://indianexpress.com/latest-news/'
+            url = 'https://www.indianexpress.com/latest-news'
             result = requests.get(url)
 
             src = result.content
@@ -406,6 +408,7 @@ def interpretCommand():
 
             headlineLinks = []
             headlines = []
+            print(soup)
 
             divs = soup.find_all('div',{'class' : 'title'})
             
@@ -425,21 +428,17 @@ def interpretCommand():
         elif wordExists(["thank you","thanks"],query):
             speak("No worries. I am here to help")
 
-        elif wordExists(['exit','goodbye','shutdown'],query):
+        elif wordExists(['exit','goodbye','shutdown','stop'],query):
             speak("Goodbye. Have a nice day.")
             global status_label
             status_label['text'] = 'No longer listening...'
             break
-        
+        elif len(query)==0:
+            speak(loop[random.randint(0,2)])
         else:
             webbrowser.open('https://www.google.com/search?q=' + query)
             speak("Here's what I found")
-            
 
-    
-            
-
-        
 
 window = None
 th = None
@@ -450,8 +449,6 @@ if __name__ == "__main__":
     window.geometry('400x600')
     window.configure(bg=WINDOW_BG)
     window.resizable(False,False)
-
-    
 
     chat_frame = Frame(window,width=400,height=500, bg=WINDOW_BG)
     chat_frame.pack_propagate(False)
@@ -468,11 +465,17 @@ if __name__ == "__main__":
 
     # bot_chat = Label(chat_frame,text="Lorem ipsum 2.0", bg=BOT_CHAT_BG, fg=TEXT_COLOR,justify=LEFT, wraplength=250,font=('Montserrat',12,'bold'))
     # bot_chat.pack(anchor='w',ipadx=2,ipady=2,pady=10,padx=10)
+    
 
     th = Thread(target=interpretCommand)
     th.start()
 
     window.mainloop()
+    
+
+
+
+
 
 
     
