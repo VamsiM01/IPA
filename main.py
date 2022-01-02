@@ -176,7 +176,7 @@ def handleEmail():
     else:
         speak(person+" is not in my contacts list. Please fill the details to add a new contact.")
         CT_Popup()
-        sendEmail(newEmailName)
+        sendEmail(newContactName)
 
 def sendEmail(person):
     recipient = contacts[person][1]
